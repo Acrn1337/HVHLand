@@ -1,3 +1,243 @@
+local player = game.Players.LocalPlayer
+local camera = game.Workspace.CurrentCamera
+local speedEnabled = false
+local flying = false
+local camLocked = false
+local targetHighlight = nil
+local targetNameLabel = nil
+local targetBox = nil
+local menuOpen = false
+local spinning = false
+local spinBotPart
+
+-- Keybind for menu
+local menuKeybind = Enum.KeyCode.M
+
+-- Speed variables
+local flySpeed = 50
+local walkSpeed = 16
+local predictionHorizontal = 0
+local predictionVertical = 0
+
+-- Color Definitions
+local highlightColor = Color3.fromRGB(255, 0, 0)
+local outlineColor = Color3.fromRGB(255, 255, 0)
+local nameColor = Color3.fromRGB(0, 0, 0)
+local boxColor = Color3.fromRGB(0, 255, 0)
+
+-- Create visual elements for target
+local function createVisuals(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+
+    targetHighlight = Instance.new("Highlight")
+    targetHighlight.Parent = targetPlayer.Character
+    targetHighlight.FillColor = highlightColor
+    targetHighlight.OutlineColor = outlineColor
+    targetHighlight.FillTransparency = 0.5
+
+    targetNameLabel = Instance.new("TextLabel")
+    targetNameLabel.Size = UDim2.new(0, 100, 0, 20)
+    targetNameLabel.Position = UDim2.new(0.5, -50, 0, -30)
+    targetNameLabel.BackgroundTransparency = 1
+    targetNameLabel.TextColor3 = nameColor
+    targetNameLabel.Text = targetPlayer.Name
+    targetNameLabel.Parent = player.PlayerGui:WaitForChild("ScreenGui")
+
+    targetBox = Instance.new("Frame")
+    targetBox.Size = UDim2.new(0, 100, 0, 100)
+    targetBox.Position = UDim2.new(0.5, -50, 0, -50)
+    targetBox.BackgroundColor3 = boxColor
+    targetBox.BorderSizePixel = 0
+    targetBox.Parent = player.PlayerGui:WaitForChild("ScreenGui")
+end
+
+-- Remove visual elements
+local function removeVisuals()
+    if targetHighlight then
+        targetHighlight:Destroy()
+        targetHighlight = nil
+    end
+    if targetNameLabel then
+        targetNameLabel:Destroy()
+        targetNameLabel = nil
+    end
+    if targetBox then
+        targetBox:Destroy()
+        targetBox = nil
+    end
+end
+
+-- Aiming: Toggle camera lock
+local function toggleCamLock()
+    camLocked = not camLocked
+    if camLocked then
+        local targetPlayer = game.Players:GetPlayers()[math.random(1, #game.Players:GetPlayers())]
+        createVisuals(targetPlayer)
+        local targetPosition = targetPlayer.Character.HumanoidRootPart.Position
+        camera.CFrame = CFrame.new(camera.CFrame.Position, targetPosition + Vector3.new(predictionHorizontal, predictionVertical, 0))
+    else
+        removeVisuals()
+    end
+end
+
+-- Misc: Toggle fly
+local function toggleFly()
+    flying = not flying
+    if flying then
+        player.Character.Humanoid.WalkSpeed = flySpeed
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Velocity = Vector3.new(0, 50, 0)
+        bodyVelocity.MaxForce = Vector3.new(0, 5000, 0)
+        bodyVelocity.Parent = player.Character.HumanoidRootPart
+        
+        while flying do
+            wait(0.1)
+            bodyVelocity.Velocity = Vector3.new(mouse.Hit.p.x - player.Character.HumanoidRootPart.Position.x, 50, mouse.Hit.p.z - player.Character.HumanoidRootPart.Position.z).unit * flySpeed
+        end
+        bodyVelocity:Destroy()
+    else
+        player.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+end
+
+-- Misc: Toggle speed
+local function toggleSpeed()
+    speedEnabled = not speedEnabled
+    player.Character.Humanoid.WalkSpeed = speedEnabled and walkSpeed or 16
+end
+
+-- Create Spin Bot
+local function createSpinBot()
+    spinBotPart = Instance.new("Part")
+    spinBotPart.Size = Vector3.new(2, 5, 2)
+    spinBotPart.Color = Color3.new(1, 0, 0)
+    spinBotPart.Anchored = true
+    spinBotPart.Position = Vector3.new(0, 5, 0)
+    spinBotPart.Parent = workspace
+
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Size = UDim2.new(0, 200, 0, 50)
+    billboardGui.Adornee = spinBotPart
+    billboardGui.Parent = spinBotPart
+
+    local textLabel = Instance.new("TextLabel", billboardGui)
+    textLabel.Text = "Spin Bot"
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.TextSize = 20
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.BackgroundTransparency = 1
+
+    -- Spin function
+    local function spin()
+        while spinning do
+            spinBotPart.CFrame = spinBotPart.CFrame * CFrame.Angles(0, math.rad(5), 0)
+            wait(0.1)
+        end
+    end
+
+    spin() -- Start spinning
+end
+
+-- Toggle Spin Bot function
+local function toggleSpinBot()
+    spinning = not spinning
+    if spinning then
+        createSpinBot()
+    else
+        if spinBotPart then
+            spinBotPart:Destroy()
+            spinBotPart = nil
+        end
+    end
+end
+
+-- Teleport Function
+local function teleportTo(location)
+    player.Character.HumanoidRootPart.CFrame = CFrame.new(location)
+end
+
+-- Open/close menu
+local function toggleMenu()
+    menuOpen = not menuOpen
+    script.Parent:FindFirstChild("ScreenGui").Enabled = menuOpen
+end
+
+-- Input handling
+local function onInputBegan(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == menuKeybind then
+        toggleMenu()
+    elseif input.KeyCode == Enum.KeyCode.F then
+        toggleFly()
+    elseif input.KeyCode == Enum.KeyCode.G then
+        toggleSpeed()
+    elseif input.KeyCode == Enum.KeyCode.H then
+        toggleCamLock()
+    elseif input.KeyCode == Enum.KeyCode.B then -- Spin Bot toggle
+        toggleSpinBot()
+    end
+end
+
+-- Connect input handling
+game:GetService("UserInputService").InputBegan:Connect(onInputBegan)
+
+-- Slider setup
+local flySpeedSlider = script.Parent:WaitForChild("MiscFrame"):WaitForChild("FlySpeedSlider")
+local walkSpeedSlider = script.Parent:WaitForChild("MiscFrame"):WaitForChild("WalkSpeedSlider")
+local horizontalPredictionSlider = script.Parent:WaitForChild("AimingFrame"):WaitForChild("HorizontalPredictionSlider")
+local verticalPredictionSlider = script.Parent:WaitForChild("AimingFrame"):WaitForChild("VerticalPredictionSlider")
+
+-- Set initial values
+flySpeedSlider.Value = flySpeed
+walkSpeedSlider.Value = walkSpeed
+horizontalPredictionSlider.Value = predictionHorizontal
+verticalPredictionSlider.Value = predictionVertical
+
+-- Update speeds from sliders
+flySpeedSlider.Changed:Connect(function()
+    flySpeed = flySpeedSlider.Value
+    if flying then
+        player.Character.Humanoid.WalkSpeed = flySpeed
+    end
+end)
+
+walkSpeedSlider.Changed:Connect(function()
+    walkSpeed = walkSpeedSlider.Value
+    if not flying then
+        player.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+end)
+
+-- Update prediction values from sliders
+horizontalPredictionSlider.Changed:Connect(function()
+    predictionHorizontal = horizontalPredictionSlider.Value
+end)
+
+verticalPredictionSlider.Changed:Connect(function()
+    predictionVertical = verticalPredictionSlider.Value
+end)
+
+-- GUI Button Connections
+local flyButton = script.Parent:WaitForChild("MiscFrame"):WaitForChild("FlyButton")
+local speedButton = script.Parent:WaitForChild("MiscFrame"):WaitForChild("SpeedButton")
+local camLockButton = script.Parent:WaitForChild("AimingFrame"):WaitForChild("CamLockButton")
+local setKeybindButton = script.Parent:WaitForChild("OptionsFrame"):WaitForChild("SetKeybindButton")
+local spinBotButton = script.Parent:WaitForChild("MiscFrame"):WaitForChild("SpinBotButton")
+
+flyButton.MouseButton1Click:Connect(toggleFly)
+speedButton.MouseButton1Click:Connect(toggleSpeed)
+camLockButton.MouseButton1Click:Connect(toggleCamLock)
+spinBotButton.MouseButton1Click:Connect(toggleSpinBot)
+
+-- Teleport buttons
+local dbButton = script.Parent:WaitForChild("WorldFrame"):WaitForChild("DBButton")
+local revolverButton = script.Parent:WaitForChild("WorldFrame"):WaitForChild("RevolverButton")
+local tacticalShotgunButton = script.Parent:WaitForChild("WorldFrame"):WaitForChild("TacticalShotgunButton")
+local highArmourButton = script.Parent:WaitForChild("WorldFrame"):WaitForChild("HighArmourButton")
+local rpgButton = script.Parent:WaitForChild("WorldFrame"):WaitForChild("RPGButton")
+
+dbButton.MouseButton1Click:Connect(function() teleportTo(Vector3.new(0, 0, 0)) end) -- Replace with
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = game.Workspace.CurrentCamera
